@@ -17,6 +17,8 @@ namespace Bread\Networking\HTTP;
 use Bread\Networking;
 use Bread\Event;
 use DateTime;
+use Bread\Networking\HTTP\Connectors\Apache2\Loop;
+use Bread\Networking\HTTP\Connectors\Apache2;
 
 class Server extends Event\Emitter implements Interfaces\Server
 {
@@ -117,5 +119,22 @@ class Server extends Event\Emitter implements Interfaces\Server
     public function shutdown()
     {
         return $this->io->shutdown();
+    }
+    
+    public static function factory($sapi)
+    {
+        switch ($sapi) {
+          case 'cli':
+              $loop = Event\Loop\Factory::create();
+              $server = new Server($loop);
+              $server->listen(8000);
+              return $server;
+          case 'cli-server':
+          case 'apache2handler':
+              $loop = new Loop();
+              return new Apache2($loop);
+          default:
+              throw new Exception(sprintf('SAPI %s not supported', $sapi));
+        }
     }
 }

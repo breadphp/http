@@ -12,7 +12,7 @@
 		"networking",
 		"http"
 	],
-	"homepage" : "https://github.com/breadphp/http.git",
+	"homepage" : "https://github.com/breadphp/http",
 	"license" : [
 		"CC-BY-3.0"
 	],
