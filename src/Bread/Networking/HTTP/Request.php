@@ -56,18 +56,27 @@ class Request extends Message
         }
     }
 
-    public function negotiate($header, $supported, &$weightedMatches = array())
+    public function negotiate($header, array $supported, &$weightedMatches = array())
     {
-        if (!$this->headers[$header]) {
-            return array_shift($supported);
+        if (!$this->headers[$header] || !$parsedHeader = explode(',', $this->headers[$header])) {
+            return null;
         }
-        $parsedHeader = explode(',', $this->headers[$header]);
+        switch ($header) {
+            case 'Accept':
+                $rangeType = 'media';
+                break;
+            case 'Accept-Language':
+                $rangeType = 'language';
+                break;
+            default:
+                $rangeType = 'default';
+        }
         foreach ($parsedHeader as $i => $r) {
-            $parsedHeader[$i] = self::parseAndNormalizeMediaRange($r);
+            $parsedHeader[$i] = self::parseAndNormalizeMediaRange($r, $rangeType);
         }
         $weightedMatches = array();
         foreach ($supported as $index => $mimeType) {
-            list ($quality, $fitness) = self::qualityAndFitnessParsed($mimeType, $parsedHeader);
+            list ($quality, $fitness) = self::qualityAndFitnessParsed($mimeType, $parsedHeader, $rangeType);
             if (!empty($quality)) {
                 $preference = 0 - $index;
                 $weightedMatches[] = array(
@@ -85,9 +94,9 @@ class Request extends Message
         return (empty($firstChoice[0][0]) ? null : $firstChoice[1]);
     }
 
-    protected static function parseAndNormalizeMediaRange($mediaRange)
+    protected static function parseAndNormalizeMediaRange($mediaRange, $rangeType = 'media')
     {
-        $parsedMediaRange = self::parseMediaRange($mediaRange);
+        $parsedMediaRange = self::parseMediaRange($mediaRange, $rangeType);
         $params = $parsedMediaRange[2];
         if (!isset($params['q']) || !is_numeric($params['q']) || floatval($params['q']) > 1 || floatval($params['q']) < 0) {
             $parsedMediaRange[2]['q'] = '1';
@@ -95,7 +104,7 @@ class Request extends Message
         return $parsedMediaRange;
     }
 
-    protected static function parseMediaRange($mediaRange)
+    protected static function parseMediaRange($mediaRange, $rangeType = 'media')
     {
         $parts = explode(';', $mediaRange);
         $params = array();
@@ -105,39 +114,70 @@ class Request extends Message
                 $params[$k] = $v;
             }
         }
-        $fullType = trim($parts[0]);
-        if ($fullType == '*') {
-            $fullType = '*/*';
+        switch ($rangeType) {
+            case 'media':
+                $fullType = trim($parts[0]);
+                if ($fullType == '*') {
+                    $fullType = '*/*';
+                }
+                list ($type, $subtype) = explode('/', $fullType);
+                if (!$subtype) {
+                    throw new Client\Exceptions\BadRequest('Malformed media-range: ' . $mediaRange);
+                }
+                $plusPos = strpos($subtype, '+');
+                if (false !== $plusPos) {
+                    $genericSubtype = substr($subtype, $plusPos + 1);
+                } else {
+                    $genericSubtype = $subtype;
+                }
+                return array(
+                    trim($type),
+                    trim($subtype),
+                    $params,
+                    $genericSubtype
+                );
+            // Now supports RFC4647 Basic Filtering (Section 3.3.1)
+            // TODO Support RFC4647 Extended Filtering (Section 3.3.2)
+            case 'language':
+                $fullType = trim($parts[0]);
+                list ($type, $subtype) = array_map('strtolower', explode('-', $fullType)) + array('*', '*');
+                return array(
+                    trim($type),
+                    trim($subtype),
+                    $params,
+                    null
+                );
+            default:
+                $fullType = trim($parts[0]);
+                return array(
+                    $fullType,
+                    $fullType,
+                    $params,
+                    $fullType
+                );
         }
-        list ($type, $subtype) = explode('/', $fullType);
-        if (!$subtype) {
-            throw new Client\Exceptions\BadRequest('Malformed media-range: ' . $mediaRange);
+    }
+    
+    protected static function quality($mimeType, $ranges, $rangeType = 'media')
+    {
+        $parsedRanges = explode(',', $ranges);
+        foreach ($parsedRanges as $i => $r) {
+            $parsedRanges[$i] = self::parseAndNormalizeMediaRange($r, $rangeType);
         }
-        $plusPos = strpos($subtype, '+');
-        if (false !== $plusPos) {
-            $genericSubtype = substr($subtype, $plusPos + 1);
-        } else {
-            $genericSubtype = $subtype;
-        }
-        return array(
-            trim($type),
-            trim($subtype),
-            $params,
-            $genericSubtype
-        );
+        return self::qualityParsed($mimeType, $parsedRanges, $rangeType);
     }
 
-    protected static function qualityParsed($mimeType, $parsedRanges)
+    protected static function qualityParsed($mimeType, $parsedRanges, $rangeType = 'media')
     {
-        list ($q, $fitness) = self::qualityAndFitnessParsed($mimeType, $parsedRanges);
+        list ($q, $fitness) = self::qualityAndFitnessParsed($mimeType, $parsedRanges, $rangeType);
         return $q;
     }
 
-    protected static function qualityAndFitnessParsed($mimeType, $parsedRanges)
+    protected static function qualityAndFitnessParsed($mimeType, $parsedRanges, $rangeType = 'media')
     {
         $bestFitness = -1;
         $bestFitQuality = 0;
-        list ($targetType, $targetSubtype, $targetParams) = self::parseAndNormalizeMediaRange($mimeType);
+        list ($targetType, $targetSubtype, $targetParams) = self::parseAndNormalizeMediaRange($mimeType, $rangeType);
         foreach ($parsedRanges as $item) {
             list ($type, $subtype, $params) = $item;
             if (($type == $targetType || $type == '*' || $targetType == '*') && ($subtype == $targetSubtype || $subtype == '*' || $targetSubtype == '*')) {
@@ -160,14 +200,5 @@ class Request extends Message
             (float) $bestFitQuality,
             $bestFitness
         );
-    }
-
-    protected static function quality($mimeType, $ranges)
-    {
-        $parsedRanges = explode(',', $ranges);
-        foreach ($parsedRanges as $i => $r) {
-            $parsedRanges[$i] = self::parseAndNormalizeMediaRange($r);
-        }
-        return self::qualityParsed($mimeType, $parsedRanges);
     }
 }
