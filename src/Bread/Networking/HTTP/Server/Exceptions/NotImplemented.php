@@ -28,4 +28,9 @@ class NotImplemented extends Exception
     protected $code = 501;
 
     protected $message = "Not Implemented";
+    
+    public function __construct($method)
+    {
+        parent::__construct(sprintf("Method %s not implemented", $method));
+    }
 }
