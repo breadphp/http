@@ -114,7 +114,9 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
     }
 
     public function listen($port = 80, $host = '127.0.0.1')
-    {}
+    {
+        return $this;
+    }
 
     public function getPort()
     {
