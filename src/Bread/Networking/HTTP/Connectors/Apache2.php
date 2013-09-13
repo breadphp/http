@@ -60,9 +60,6 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
                         'extractFile'
                     ), $_FILES);
                     $data = array_replace_recursive($_POST, $files);
-                    $request->emit('parts', array(
-                        $data
-                    ));
                     $collapse($parts, $data);
                     array_walk($parts, function ($part, $name) use ($request) {
                         $request->emit('part', array(
@@ -70,6 +67,9 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
                             $name
                         ));
                     });
+                    $request->emit('parts', array(
+                        $data
+                    ));
                 });
             }
         }
@@ -113,7 +113,7 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
         $this->loop->run();
     }
 
-    public function listen($port = 80, $host = '127.0.0.1')
+    public function listen($port, $host = '127.0.0.1')
     {
         return $this;
     }

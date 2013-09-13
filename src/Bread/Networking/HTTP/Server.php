@@ -101,7 +101,7 @@ class Server extends Event\Emitter implements Interfaces\Server
         }
     }
 
-    public function listen($port = 80, $host = '127.0.0.1')
+    public function listen($port, $host = '127.0.0.1')
     {
         return $this->io->listen($port, $host);
     }
@@ -126,9 +126,7 @@ class Server extends Event\Emitter implements Interfaces\Server
         switch ($sapi) {
           case 'cli':
               $loop = Event\Loop\Factory::create();
-              $server = new Server($loop);
-              $server->listen(8000);
-              return $server;
+              return new Server($loop);
           case 'cli-server':
           case 'apache2handler':
               $loop = new Loop();
