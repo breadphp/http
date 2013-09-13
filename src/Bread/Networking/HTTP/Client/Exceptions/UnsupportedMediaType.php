@@ -28,4 +28,9 @@ class UnsupportedMediaType extends Exception
     protected $code = 415;
 
     protected $message = "Unsupported Media Type";
+    
+    public function __construct($mediaType)
+    {
+        parent::__construct(sprintf("Unsupported media type %s\n", $mediaType));
+    }
 }
