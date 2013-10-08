@@ -18,9 +18,12 @@ use Bread\Event;
 use Bread\Networking\HTTP;
 use Bread\Networking\HTTP\Request;
 use Bread\Networking\HTTP\Response;
+use Bread\Streaming\Bucket;
+use Bread\Networking\HTTP\Parsers\MultipartFormData;
 
 class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
 {
+    
 
     public $loop;
 
@@ -40,41 +43,52 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
     public function run()
     {
         $headers = apache_request_headers();
+        $connection = new Apache2\Connection($this->loop);
+        $request = new Request($connection, $_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI'], $_SERVER['SERVER_PROTOCOL'], $headers);
         if (isset($headers['Content-Type'])) {
             $contentType = $headers['Content-Type'];
             if (preg_match('|^multipart/form-data|', $contentType)) {
                 $this->onAfter('request', function ($request, $response) {
                     $parts = array();
-                    $collapse = function (&$res, $source, $pk = null) use (&$collapse) {
-                        foreach ($source as $k => $v) {
-                            $tk = $pk ? "{$pk}[{$k}]" : $k;
-                            if (!is_array($v)) {
-                                $res[$tk] = $v;
-                            } else {
-                                $collapse($res, $v, $tk);
-                            }
-                        }
-                    };
-                    $files = array_map(array(
-                        $this,
-                        'extractFile'
-                    ), $_FILES);
-                    $data = array_replace_recursive($_POST, $files);
-                    $collapse($parts, $data);
-                    array_walk($parts, function ($part, $name) use ($request) {
-                        $request->emit('part', array(
-                            $part,
-                            $name
-                        ));
-                    });
-                    $request->emit('parts', array(
-                        $data
-                    ));
+                    switch ($request->method) {
+                        case 'POST':
+                            $collapse = function (&$res, $source, $pk = null) use (&$collapse) {
+                                foreach ($source as $k => $v) {
+                                    $tk = $pk ? "{$pk}[{$k}]" : $k;
+                                    if (!is_array($v)) {
+                                        $res[$tk] = $v;
+                                    } else {
+                                        $collapse($res, $v, $tk);
+                                    }
+                                }
+                            };
+                            $files = array_map(array(
+                                $this,
+                                'extractFile'
+                            ), $_FILES);
+                            $data = array_replace_recursive($_POST, $files);
+                            $collapse($parts, $data);
+                            array_walk($parts, function ($part, $name) use ($request) {
+                                $request->emit('part', array(
+                                    $part,
+                                    $name
+                                ));
+                            });
+                            $request->emit('parts', array(
+                                $parts
+                            ));
+                            break;
+                        default:
+                            $bucket = new Bucket($request);
+                            $request->on('end', function () use ($request, $bucket) {
+                                $parser = new MultipartFormData();
+                                $parts = $parser->parse($request, $bucket->contents());
+                                $request->emit('parts', array($parts));
+                            });
+                    }
                 });
             }
         }
-        $connection = new Apache2\Connection($this->loop);
-        $request = new Request($connection, $_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI'], $_SERVER['SERVER_PROTOCOL'], $headers);
         $connection->on('end', function () use ($request) {
             $request->emit('end');
         });
