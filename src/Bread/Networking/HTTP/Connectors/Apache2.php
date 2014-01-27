@@ -23,7 +23,7 @@ use Bread\Networking\HTTP\Parsers\MultipartFormData;
 
 class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
 {
-    
+
 
     public $loop;
 
@@ -47,44 +47,36 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
         $request = new Request($connection, $_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI'], $_SERVER['SERVER_PROTOCOL'], $headers);
         if (isset($headers['Content-Type'])) {
             $contentType = $headers['Content-Type'];
-            if (preg_match('|^multipart/form-data|', $contentType)) {
+            if (preg_match('|^multipart/form-data-apache|', $contentType)) {
+                $request->headers['Content-Type'] = preg_replace('/-apache/', '', $contentType);
+            }
+            if (preg_match('|^multipart/form-data|', $request->headers['Content-Type'])) {
                 $this->onAfter('request', function ($request, $response) {
                     $parts = array();
                     switch ($request->method) {
-                        case 'POST':
-                            $collapse = function (&$res, $source, $pk = null) use (&$collapse) {
-                                foreach ($source as $k => $v) {
-                                    $tk = $pk ? "{$pk}[{$k}]" : $k;
-                                    if (!is_array($v)) {
-                                        $res[$tk] = $v;
-                                    } else {
-                                        $collapse($res, $v, $tk);
-                                    }
+                        case 'xPOST':
+                            $parts = array();
+                            foreach ($_POST as $name => $value) {
+                                if (empty($value)) {
+                                    continue;
                                 }
-                            };
+                                $entry = array();
+                                $entry['size'] = strlen(trim($value));
+                                $entry['body'] = trim($value);
+                                $entry['headers']['Content-Type'] = 'text/plain';
+                                $parts[$name][] = $entry;
+                            }
                             $files = array_map(array(
                                 $this,
                                 'extractFile'
                             ), $_FILES);
-                            $data = array_replace_recursive($_POST, $files);
-                            $collapse($parts, $data);
-                            array_walk($parts, function ($part, $name) use ($request) {
-                                $request->emit('part', array(
-                                    $part,
-                                    $name
-                                ));
-                            });
+                            $parts = array_merge($parts, $files);
                             $request->emit('parts', array(
                                 $parts
                             ));
                             break;
                         default:
-                            $bucket = new Bucket($request);
-                            $request->on('end', function () use ($request, $bucket) {
-                                $parser = new MultipartFormData();
-                                $parts = $parser->parse($request, $bucket->contents());
-                                $request->emit('parts', array($parts));
-                            });
+                            new MultipartFormData($request);
                     }
                 });
             }
@@ -142,62 +134,4 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
         $this->loop->stop();
     }
 
-    protected function normalizeFile($data)
-    {
-        if (!is_array($data)) {
-            return $data;
-        }
-        
-        $keys = array_keys($data);
-        sort($keys);
-        
-        if (self::$fileKeys != $keys || !isset($data['name']) || !is_array($data['name'])) {
-            return $data;
-        }
-        
-        $files = $data;
-        foreach (self::$fileKeys as $k) {
-            unset($files[$k]);
-        }
-        
-        foreach (array_keys($data['name']) as $key) {
-            $files[$key] = $this->normalizeFile(
-                array(
-                    'error' => $data['error'][$key],
-                    'name' => $data['name'][$key],
-                    'size' => $data['size'][$key],
-                    'tmp_name' => $data['tmp_name'][$key],
-                    'type' => $data['type'][$key]
-                ));
-        }
-        return $files;
-    }
-
-    protected function extractFile($data)
-    {
-        $file = $this->normalizeFile($data);
-        if (is_array($file)) {
-            $keys = array_keys($file);
-            sort($keys);
-            
-            if ($keys == self::$fileKeys) {
-                if (UPLOAD_ERR_NO_FILE == $file['error']) {
-                    $file = null;
-                } else {
-                    $file = array(
-                        'name' => $file['name'],
-                        'type' => $file['type'],
-                        'size' => $file['size'],
-                        'data' => fopen($file['tmp_name'], 'r')
-                    );
-                }
-            } else {
-                $file = array_map(array(
-                    $this,
-                    'extractFile'
-                ), $file);
-            }
-        }
-        return $file;
-    }
 }
