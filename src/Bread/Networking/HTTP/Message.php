@@ -476,7 +476,7 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         $keys = array();
         $values = array();
         foreach (explode(';', $this->headers[$headerName]) as $part) {
-            list ($key, $value) = explode('=', urldecode($part)) + array(
+            list ($key, $value) = explode('=', urldecode($part), 2) + array(
                 null,
                 null
             );

@@ -113,7 +113,7 @@ class MultipartFormData
                     }
                 }
             } else {
-                $headers[$name]['headers'][$values['key']] = $values['value'];
+                $headers[$name]['headers'][$values['key']] = trim($values['value']);
             }
         }
         return $headers;
