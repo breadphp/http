@@ -27,6 +27,8 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
 
     public $loop;
 
+    private $context;
+
     private static $fileKeys = array(
         'error',
         'name',
@@ -35,9 +37,10 @@ class Apache2 extends Event\Emitter implements HTTP\Interfaces\Server
         'type'
     );
 
-    public function __construct(Event\Interfaces\Loop $loop)
+    public function __construct(Event\Interfaces\Loop $loop, array $context = array())
     {
         $this->loop = $loop;
+        $this->context = $context;
     }
 
     public function run()
