@@ -26,9 +26,9 @@ class Server extends Event\Emitter implements Interfaces\Server
 
     private $io;
 
-    public function __construct(Event\Interfaces\Loop $loop)
+    public function __construct(Event\Interfaces\Loop $loop, array $context = array())
     {
-        $this->io = new Networking\Server($loop);
+        $this->io = new Networking\Server($loop, $context);
         $this->io->on('connection', function ($conn) {
             // TODO: chunked transfer encoding
             $parser = new Request\Parser();
@@ -123,16 +123,16 @@ class Server extends Event\Emitter implements Interfaces\Server
         return $this->io->shutdown();
     }
 
-    public static function factory($sapi)
+    public static function factory($sapi, array $context = array())
     {
         switch ($sapi) {
           case 'cli':
               $loop = Event\Loop\Factory::create();
-              return new Server($loop);
+              return new Server($loop, $context);
           case 'cli-server':
           case 'apache2handler':
               $loop = new Loop();
-              return new Apache2($loop);
+              return new Apache2($loop, $context);
           default:
               throw new Exception(sprintf('SAPI %s not supported', $sapi));
         }

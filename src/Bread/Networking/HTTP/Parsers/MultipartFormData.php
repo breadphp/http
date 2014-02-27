@@ -20,13 +20,12 @@ class MultipartFormData
         $this->parts = array();
         $this->currentPart = array();
         preg_match('/boundary=(.*)$/', $this->request->headers['Content-Type'], $matches);
-        $this->boundary = $matches[1];
+        $this->boundary = isset($matches[1]) ? $matches[1] : "";
         $this->request->on('data', array(
             $this,
             'parse'
         ));
-        $this->request->on('end', function ()
-        {
+        $this->request->on('end', function () {
             $this->request->emit('parts', array(
                 $this->parts
             ));

@@ -385,6 +385,7 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
             $this
         ));
         if (!$this->writable || !$this->length) {
+            $this->end();
             return false;
         }
         if (is_resource($data)) {
@@ -417,6 +418,8 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
                 }
             }
             $this->body($data);
+        } else {
+            $this->headers['Content-Length'] = 0;
         }
         $this->connection->loop->addReadStream($this->body, array(
             $this,

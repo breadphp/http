@@ -44,11 +44,15 @@ class Parser extends Event\Emitter
      *
      * message-header = field-name ":" [ field-value ]
      */
-    const HEADER_LINE_PATTERN = '/^(?<name>\S+):\s?(?<value>.*)$/i';
+    const HEADER_LINE_PATTERN = '/^(?<name>\S+):\s?(?<value>[^\r\n]*)$/i';
 
     const EMPTY_LINE_PATTERN = '/^$/';
 
     private $expecting;
+
+    private $buffer = "";
+
+    private $isHeadersEnd = false;
 
     private $request;
 
@@ -63,11 +67,14 @@ class Parser extends Event\Emitter
     {
         $this->request = null;
         $this->expecting = static::EXPECTING_REQUEST_LINE;
+        $this->buffer = "";
+        $this->isHeadersEnd = false;
         return $this;
     }
 
     public function parse($data, $connection)
     {
+        if ($connection)
         try {
             $this->tryToParse($data, $connection);
         } catch (Exception $exception) {
@@ -81,19 +88,30 @@ class Parser extends Event\Emitter
         if (strlen($data) > $this->maxSize) {
             throw new Client\Exceptions\RequestEntityTooLarge($this->maxSize);
         }
+        $lines = "";
+        $data = $this->buffer . $data;
         if ($emptyLine = strpos($data, "\r\n\r\n")) {
-            $lines = substr($data, 0, $emptyLine + 2);
-            $data = substr($data, $emptyLine + 4);
+            if (!$this->isHeadersEnd) {
+                $lines = substr($data, 0, $emptyLine + 2);
+                $data = substr($data, $emptyLine + 4);
+                if ($this->buffer) {
+                    $lines = $lines;
+                }
+                $this->isHeadersEnd = true;
+            }
+            $this->buffer = "";
         } else {
-            $lines = $data;
-            $data = null;
+            if (!$this->isHeadersEnd) {
+                $this->buffer .= $data;
+                $data = null;
+            }
         }
-        foreach (explode("\r\n", $lines, -1) as $line) {
+        foreach (explode("\r\n", $lines) as $line) {
             switch ($this->expecting) {
                 case static::EXPECTING_REQUEST_LINE:
                     if (preg_match(static::REQUEST_LINE_PATTERN, $line, $matches)) {
                         $this->request = new Request($connection, $matches['method'], $matches['uri'], $matches['version']);
-                        print("New request from " . $connection->getRemoteAddress() . "\n");
+                        print("\nNew request from " . $connection->getRemoteAddress() . "\n");
                         print("{$this->request->requestLine}\n");
                         $this->request->on('end', function () {
                             $this->expecting = static::EXPECTING_REQUEST_LINE;
