@@ -19,6 +19,7 @@ use Bread\Event;
 use DateTime;
 use Bread\Networking\HTTP\Connectors\Apache2\Loop;
 use Bread\Networking\HTTP\Connectors\Apache2;
+use Bread\Networking\HTTP\Parsers\MultipartFormData;
 
 class Server extends Event\Emitter implements Interfaces\Server
 {
@@ -30,9 +31,11 @@ class Server extends Event\Emitter implements Interfaces\Server
         $this->io = new Networking\Server($loop);
         $this->io->on('connection', function ($conn) {
             // TODO: chunked transfer encoding
-            // TODO: multipart parsing
             $parser = new Request\Parser();
             $parser->on('headers', function (Request $request, $data) use ($conn, $parser) {
+                if (preg_match('|^multipart/form-data|', $request->headers['Content-Type'])) {
+                    $multipart = new MultipartFormData($request);
+                }
                 $this->handleRequest($conn, $parser, $request, $data);
                 $conn->removeListener('data', array(
                     $parser,
@@ -87,7 +90,6 @@ class Server extends Event\Emitter implements Interfaces\Server
         ));
         $request->on('data', function ($data) use ($request) {
             $request->receivedLength += strlen($data);
-            printf("Received %d of %d\n", $request->receivedLength, $request->length);
             if ($request->receivedLength >= $request->length) {
                 $request->end();
             }
@@ -120,7 +122,7 @@ class Server extends Event\Emitter implements Interfaces\Server
     {
         return $this->io->shutdown();
     }
-    
+
     public static function factory($sapi)
     {
         switch ($sapi) {
