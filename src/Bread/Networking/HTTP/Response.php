@@ -22,7 +22,7 @@ use Bread\Networking\HTTP\Response\Cookie;
 
 class Response extends Message
 {
-    
+
     const STATUS_CONTINUE = 100;
     const STATUS_SWITCHING_PROTOCOLS = 101;
     const STATUS_PROCESSING = 102;
@@ -89,8 +89,6 @@ class Response extends Message
 
     public $cookies = array();
 
-    public $messages = array();
-
     public static $statusCodes = array(
         100 => "Continue",
         101 => "Switching Protocols",
@@ -156,16 +154,12 @@ class Response extends Message
         if (isset($this->request->headers['Connection'])) {
             $headers['Connection'] = $this->request->headers['Connection'];
         }
-        if (isset($this->request->cookies['Messages'])) {
-            $this->messages = json_decode($this->request->cookies['Messages'], true);
-            $this->unsetCookie('Messages');
-        }
         $this->onBefore('headers', function () {
             $this->headers['Set-Cookie'] = $this->cookies;
         });
         parent::__construct($this->request->connection, $this->request->protocol, $this->statusLine, $headers, $body);
         if ($range = $this->request->headers['Range']) {
-            $this->onceBefore('headers', 
+            $this->onceBefore('headers',
                 function () use($range)
                 {
                     $this->connection->loop->removeReadStream($this->body);
@@ -201,19 +195,6 @@ class Response extends Message
             $this->status,
             $this->reason
         ));
-        if (in_array($status, array(
-            301,
-            302,
-            303,
-            304,
-            401
-        ))) {
-            $this->setCookie(new Cookie('Messages', json_encode($this->messages)));
-            $this->onceAfter('headers', array(
-                $this,
-                'flush'
-            ));
-        }
     }
 
     public function setCookie($cookie, $value = null, $expire = 0, $path = '/', $domain = null, $secure = false, $httpOnly = true)
@@ -280,15 +261,6 @@ class Response extends Message
     public function download($filename)
     {
         $this->headers['Content-Disposition'] = sprintf('attachment; filename="%s"', $filename);
-    }
-
-    public function message($message, $severity = LOG_INFO)
-    {
-        $args = func_get_args();
-        if (!isset($this->messages[$severity])) {
-            $this->messages[$severity] = array();
-        }
-        $this->messages[$severity][] = $message;
     }
 
     protected function etag()
