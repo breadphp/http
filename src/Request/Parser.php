@@ -111,8 +111,6 @@ class Parser extends Event\Emitter
                 case static::EXPECTING_REQUEST_LINE:
                     if (preg_match(static::REQUEST_LINE_PATTERN, $line, $matches)) {
                         $this->request = new Request($connection, $matches['method'], $matches['uri'], $matches['version']);
-                        print("\nNew request from " . $connection->getRemoteAddress() . "\n");
-                        print("{$this->request->requestLine}\n");
                         $this->request->on('end', function () {
                             $this->expecting = static::EXPECTING_REQUEST_LINE;
                         })->on('close', function () {
@@ -124,7 +122,6 @@ class Parser extends Event\Emitter
                                 $this->expecting = static::EXPECTING_HEADER_LINE;
                                 break;
                             default:
-                                print("HTTP/0.9\n");
                                 return $this->emit('headers', array(
                                     $this->request,
                                     $data
@@ -140,7 +137,6 @@ class Parser extends Event\Emitter
                     }
                     if (preg_match(static::HEADER_LINE_PATTERN, $line, $matches)) {
                         $this->request->header($matches['name'], trim($matches['value']));
-                        print("{$line}\n");
                     } elseif (preg_match(static::EMPTY_LINE_PATTERN, $line)) {
                         switch ($this->request->protocol) {
                             case 'HTTP/1.1':

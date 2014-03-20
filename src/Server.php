@@ -20,6 +20,7 @@ use DateTime;
 use Bread\Networking\HTTP\Connectors\Apache2\Loop;
 use Bread\Networking\HTTP\Connectors\Apache2;
 use Bread\Networking\HTTP\Parsers\MultipartFormData;
+use Bread\Console\Logger;
 
 class Server extends Event\Emitter implements Interfaces\Server
 {
@@ -28,6 +29,7 @@ class Server extends Event\Emitter implements Interfaces\Server
 
     public function __construct(Event\Interfaces\Loop $loop, array $context = array())
     {
+        $this->logger = new Logger();
         $this->io = new Networking\Server($loop, $context);
         $this->io->on('connection', function ($conn) {
             // TODO: chunked transfer encoding
@@ -36,6 +38,9 @@ class Server extends Event\Emitter implements Interfaces\Server
                 if (preg_match('|^multipart/form-data|', $request->headers['Content-Type'])) {
                     $multipart = new MultipartFormData($request);
                 }
+                $this->logger->log("New request from: {$request->connection->getRemoteAddress()}");
+                $this->logger->log($request->startLine, 'light_blue');
+                $this->logger->log((string) $request->headers, 'blue');
                 $this->handleRequest($conn, $parser, $request, $data);
                 $conn->removeListener('data', array(
                     $parser,
@@ -69,6 +74,10 @@ class Server extends Event\Emitter implements Interfaces\Server
         $response->headers['Date'] = gmdate(Response::DATETIME_FORMAT);
         $response->headers['Server'] = __CLASS__;
         $response->once('headers', function ($response) use ($conn) {
+            $color = $response->status >= 400 ? 'red' : 'green';
+            $this->logger->log("Response sent to: {$conn->getRemoteAddress()}");
+            $this->logger->log($response->startLine, "light_$color");
+            $this->logger->log((string) $response->headers, $color);
             $conn->write((string) $response);
         });
         if (!$this->listeners('request')) {
