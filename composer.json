@@ -17,13 +17,14 @@
 		"CC-BY-3.0"
 	],
 	"require" : {
+        "bread/console" : "~0.1",
 		"bread/networking" : "~1.0",
 		"bread/dns" : "~1.0",
 		"php" : ">=5.4"
 	},
 	"autoload" : {
-		"psr-0" : {
-			"Bread\\Networking\\HTTP" : "src"
+		"psr-4" : {
+			"Bread\\Networking\\HTTP\\" : "src"
 		}
 	}
 }
