@@ -297,13 +297,6 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         $this->body($body);
     }
 
-    public function __destruct()
-    {
-        if (is_resource($this->body)) {
-            fclose($this->body);
-        }
-    }
-
     public function __get($name)
     {
         switch ($name) {
@@ -354,6 +347,9 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
             $this->body = fopen("php://temp", 'r+');
             fwrite($this->body, $body);
             rewind($this->body);
+            $this->on('end', function () {
+                fclose($this->body);
+            });
         } else {
             $this->body = $body;
         }
@@ -439,7 +435,6 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
             $this
         ));
         $this->emit('end');
-        fclose($this->body);
         $this->readable = false;
         $this->writable = false;
         $this->removeAllListeners();
