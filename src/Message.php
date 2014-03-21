@@ -343,15 +343,20 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
 
     public function body($body = null)
     {
-        if (!is_resource($body)) {
+        if (is_resource($body)) {
+            $this->body = $body;
+            $this->once('end', function () {
+                rewind($this->body);
+            });
+        } elseif ($body !== null) {
             $this->body = fopen("php://temp", 'r+');
             fwrite($this->body, $body);
             rewind($this->body);
-            $this->on('end', function () {
+            $this->once('end', function () {
                 fclose($this->body);
             });
         } else {
-            $this->body = $body;
+            $this->body = null;
         }
     }
 
