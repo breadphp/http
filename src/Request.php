@@ -47,8 +47,9 @@ class Request extends Message
         $this->uri = parse_url($uri, PHP_URL_PATH);
         $this->query = new Request\Query(parse_url($uri, PHP_URL_QUERY));
         parent::__construct($connection, $protocol, $this->requestLine, $headers, $body);
-        // TODO Not here
-        $this->cookies = new Message\Bag($this->explodeHeader('Cookie'));
+        $this->once('headers', function() {
+            $this->cookies = new Message\Bag($this->explodeHeader('Cookie'));
+        });
     }
 
     public function __get($name)
@@ -162,7 +163,7 @@ class Request extends Message
                 );
         }
     }
-    
+
     protected static function quality($mimeType, $ranges, $rangeType = 'media')
     {
         $parsedRanges = explode(',', $ranges);

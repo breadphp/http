@@ -36,6 +36,9 @@ class Server extends Event\Emitter implements Interfaces\Server
             // TODO: chunked transfer encoding
             $parser = new Request\Parser();
             $parser->on('headers', function (Request $request, $data) use ($conn, $parser) {
+                $request->emit('headers', array(
+                    $request
+                ));
                 if (preg_match('|^multipart/form-data|', $request->headers['Content-Type'])) {
                     $multipart = new MultipartFormData($request);
                 }
