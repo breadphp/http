@@ -294,7 +294,17 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         $this->protocol = $protocol;
         $this->startLine = $startLine;
         $this->headers = new Message\Header($headers);
-        $this->body($body);
+        $this->body = fopen('php://temp', 'r+');
+        if ($body !== null) {
+            $this->body($body);
+        }
+    }
+
+    public function __destruct()
+    {
+        if (is_resource($this->body)) {
+            fclose($this->body);
+        }
     }
 
     public function __get($name)
@@ -341,22 +351,22 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         $this->headers[$name] = $value;
     }
 
-    public function body($body = null)
+    public function body($body = '')
     {
         if (is_resource($body)) {
             $this->body = $body;
             $this->once('end', function () {
+                $this->connection->loop->removeReadStream($this->body);
                 rewind($this->body);
             });
-        } elseif ($body !== null) {
+        } else {
             $this->body = fopen("php://temp", 'r+');
             fwrite($this->body, $body);
             rewind($this->body);
             $this->once('end', function () {
+                $this->connection->loop->removeReadStream($this->body);
                 fclose($this->body);
             });
-        } else {
-            $this->body = null;
         }
     }
 
@@ -422,10 +432,12 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         } else {
             $this->headers['Content-Length'] = 0;
         }
+
         $this->connection->loop->addReadStream($this->body, array(
             $this,
             'write'
         ));
+
         $this->emit('headers', array(
             $this
         ));
