@@ -15,6 +15,7 @@
 namespace Bread\Networking\HTTP;
 
 use Bread\Networking;
+use Bread\Console\Timer;
 
 class Request extends Message
 {
@@ -31,6 +32,8 @@ class Request extends Message
 
     public $cookies = array();
 
+    public $timer;
+
     public function __construct(Networking\Interfaces\Connection $connection, $method = 'GET', $uri = '/', $protocol = 'HTTP/1.1', $headers = array(), $body = null)
     {
         $this->requestLine = implode(' ', array(
@@ -38,6 +41,8 @@ class Request extends Message
             $uri,
             $protocol
         ));
+        $this->timer = new Timer();
+        $this->timer->start();
         $this->method = $method;
         $this->uri = parse_url($uri, PHP_URL_PATH);
         $this->query = new Request\Query(parse_url($uri, PHP_URL_QUERY));

@@ -25,6 +25,7 @@ use Bread\Console\Logger;
 class Server extends Event\Emitter implements Interfaces\Server
 {
 
+    private $logger;
     private $io;
 
     public function __construct(Event\Interfaces\Loop $loop, array $context = array())
@@ -75,7 +76,8 @@ class Server extends Event\Emitter implements Interfaces\Server
         $response->headers['Server'] = __CLASS__;
         $response->once('headers', function ($response) use ($conn) {
             $color = $response->status >= 400 ? 'red' : 'green';
-            $this->logger->log("Response sent to: {$conn->getRemoteAddress()}");
+            $seconds = $response->request->timer->stop();
+            $this->logger->log("Response sent to: {$conn->getRemoteAddress()} (request took {$seconds} seconds)");
             $this->logger->log($response->startLine, "light_$color");
             $this->logger->log((string) $response->headers, $color);
             $conn->write((string) $response);
