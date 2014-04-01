@@ -52,8 +52,6 @@ class Parser extends Event\Emitter
 
     private $buffer = "";
 
-    private $isHeadersEnd = false;
-
     private $request;
 
     private $maxSize = 4096;
@@ -65,21 +63,24 @@ class Parser extends Event\Emitter
 
     public function reset()
     {
-        $this->request = null;
         $this->expecting = static::EXPECTING_REQUEST_LINE;
+        $this->request = null;
         $this->buffer = "";
-        $this->isHeadersEnd = false;
         return $this;
     }
 
     public function parse($data, $connection)
     {
-        if ($connection)
-        try {
-            $this->tryToParse($data, $connection);
-        } catch (Exception $exception) {
-            $code = $exception->getCode();
-            $connection->end(sprintf('HTTP/1.1 %s %s', $code, Response::$statusCodes[$code]));
+        if ($connection) {
+            try {
+                $this->tryToParse($data, $connection);
+            } catch (Exception $exception) {
+                $this->reset();
+                $code = $exception->getCode();
+                $connection->write(sprintf("HTTP/1.1 %s %s\r\n", $code, Response::$statusCodes[$code]));
+                $connection->write("\r\n");
+                $connection->write(sprintf("%s\r\n", $exception->getMessage()));
+            }
         }
     }
 
@@ -88,25 +89,15 @@ class Parser extends Event\Emitter
         if (strlen($data) > $this->maxSize) {
             throw new Client\Exceptions\RequestEntityTooLarge($this->maxSize);
         }
-        $lines = "";
-        $data = $this->buffer . $data;
-        if ($emptyLine = strpos($data, "\r\n\r\n")) {
-            if (!$this->isHeadersEnd) {
-                $lines = substr($data, 0, $emptyLine + 2);
-                $data = substr($data, $emptyLine + 4);
-                if ($this->buffer) {
-                    $lines = $lines;
-                }
-                $this->isHeadersEnd = true;
-            }
-            $this->buffer = "";
+        $this->buffer .= $data;
+        if (false !== ($pos = strpos($this->buffer, "\r\n\r\n"))) {
+            $lines = explode("\r\n", substr($this->buffer, 0, $pos + 2));
+            $this->buffer = substr($this->buffer, $pos + 4);
         } else {
-            if (!$this->isHeadersEnd) {
-                $this->buffer .= $data;
-                $data = null;
-            }
+            $lines = explode("\r\n", $this->buffer);
+            $this->buffer = array_pop($lines);
         }
-        foreach (explode("\r\n", $lines) as $line) {
+        foreach ($lines as $line) {
             switch ($this->expecting) {
                 case static::EXPECTING_REQUEST_LINE:
                     if (preg_match(static::REQUEST_LINE_PATTERN, $line, $matches)) {
@@ -124,7 +115,7 @@ class Parser extends Event\Emitter
                             default:
                                 return $this->emit('headers', array(
                                     $this->request,
-                                    $data
+                                    $this->buffer
                                 ));
                         }
                     } elseif (!preg_match(static::EMPTY_LINE_PATTERN, $line)) {
@@ -146,21 +137,13 @@ class Parser extends Event\Emitter
                         }
                         return $this->emit('headers', array(
                             $this->request,
-                            $data
+                            $this->buffer
                         ));
-                    } else {
-                        throw new Client\Exceptions\BadRequest("Expecting header line");
                     }
                     break;
                 default:
                     throw new Client\Exceptions\BadRequest();
             }
-        }
-        if (!is_null($data)) {
-            return $this->emit('headers', array(
-                $this->request,
-                $data
-            ));
         }
     }
 }
