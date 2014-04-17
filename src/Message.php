@@ -300,13 +300,6 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         }
     }
 
-    public function __destruct()
-    {
-        if (is_resource($this->body)) {
-            fclose($this->body);
-        }
-    }
-
     public function __get($name)
     {
         switch ($name) {
