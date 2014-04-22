@@ -415,6 +415,7 @@ abstract class Message extends Event\Emitter implements Streaming\Interfaces\Rea
         if (null !== $data) {
             if (!isset($this->headers['Content-Length'])) {
                 if (is_resource($data)) {
+                    stream_get_contents($data);
                     $this->headers['Content-Length'] = ftell($data);
                     rewind($data);
                 } else {
